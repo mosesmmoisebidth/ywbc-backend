@@ -43,7 +43,12 @@ import {
 
 export type StreamEvent =
   | { type: 'token'; value: string }
-  | { type: 'done'; enrichments: { enrichments: unknown; quickActions: unknown } | null };
+  | {
+      type: 'done';
+      enrichments:
+        | { enrichments: unknown; quickActions: unknown; followUps: string[] }
+        | null;
+    };
 
 interface SendMessageInput {
   userId: string;
@@ -233,17 +238,20 @@ export async function* sendMessage(
     return;
   }
 
-  // 10. Parse enrichments.
-  const { cleanText, enrichments, quickActions } = parseEnrichments(buffer);
+  // 10. Parse enrichments + follow-up chips.
+  const { cleanText, enrichments, quickActions, followUps } = parseEnrichments(buffer);
   const finalText = cleanText || buffer;
 
-  // 11. Persist assistant message + maybe title the conversation.
+  // 11. Persist assistant message + maybe title the conversation. The
+  // follow-ups ride alongside the enrichments JSON column so the mobile
+  // can hydrate them when it re-fetches the conversation later.
+  const enrichmentsForStorage = { ...enrichments, followUps };
   await prisma.chatMessage.create({
     data: {
       conversationId,
       role: 'ASSISTANT',
       content: finalText,
-      enrichments: enrichments as unknown as object,
+      enrichments: enrichmentsForStorage as unknown as object,
       quickActions: quickActions as unknown as object,
       language,
     },
@@ -264,6 +272,6 @@ export async function* sendMessage(
 
   yield {
     type: 'done',
-    enrichments: { enrichments, quickActions },
+    enrichments: { enrichments, quickActions, followUps },
   };
 }
