@@ -19,14 +19,27 @@ const scheduleExceptions = z.array(
   z.object({ date: z.string(), available: z.boolean().optional() }),
 );
 
+// Empty-or-URL: avatars are filled in after the wizard ships, so allow ''.
+const emptyOrUrl = z.string().refine(
+  (v) => v === '' || /^https?:\/\//.test(v),
+  { message: 'Must be a URL or empty' },
+);
+
 export const therapistCreateSchema = z.object({
   fullName: z.string().min(2),
   title: z.string().min(2),
-  photoURL: z.string().url(),
+  photoURL: emptyOrUrl.default(''),
   bio: z.string().min(10),
   specialties: z.array(z.string()).min(1),
   languages: z.array(z.string()).min(1),
   credentials: z.array(z.string()).default([]),
+  // Contact + payout fields added in the revamp. Optional so partial
+  // profiles still validate; required-ness is enforced at the route layer
+  // when publishing.
+  email: z.string().email().optional(),
+  phone: z.string().min(5).max(40).optional(),
+  momoNumber: z.string().min(5).max(40).optional(),
+  momoAccountName: z.string().min(2).max(120).optional(),
   pricePerSession: z.number().int().positive(),
   pricingByType: z.object({
     online: z.number().int().nonnegative().optional(),
@@ -50,10 +63,22 @@ export const therapistAvailabilitySchema = z.object({
 export const sessionCreateSchema = z.object({
   title: z.string().min(2),
   description: z.string().min(10),
-  coverImageURL: z.string().url(),
+  coverImageURL: emptyOrUrl.default(''),
   hostName: z.string().min(2),
-  hostPhotoURL: z.string().url(),
+  hostPhotoURL: emptyOrUrl.default(''),
   topic: z.string().min(2),
+  // New metadata fields from the revamp wizard. All optional so we don't
+  // break existing seed rows and we keep "save as draft" frictionless.
+  topicArea: z.string().min(2).max(80).optional(),
+  gatheringType: z
+    .enum(['CIRCLE', 'WORKSHOP', 'SUPPORT', 'TRAINING', 'CONVERSATION'])
+    .optional(),
+  locationName: z.string().max(160).optional(),
+  address: z.string().max(240).optional(),
+  language: z.string().max(40).optional(),
+  coHosts: z.array(z.string().min(1).max(120)).max(8).optional(),
+  prepItems: z.array(z.string().min(1).max(120)).max(8).optional(),
+  accessibilityNotes: z.string().max(500).optional(),
   dateTime: z.string().datetime(),
   duration: z.number().int().min(15).max(240),
   capacity: z.number().int().min(1).max(500),
@@ -116,12 +141,16 @@ export const faqSchema = z.object({
 export const faqUpdateSchema = faqSchema.partial();
 export const faqReorderSchema = z.object({ ids: z.array(z.string()).min(1) });
 
+// Meditation audio + cover share the same emptyOrUrl helper as therapists +
+// sessions — declared near the top of this file.
 export const meditationSchema = z.object({
   title: z.string().min(2),
   description: z.string().min(5),
-  audioURL: z.string().url(),
-  duration: z.number().int().positive(),
-  coverImageURL: z.string().url(),
+  audioURL: emptyOrUrl.default(''),
+  duration: z.number().int().nonnegative().default(0),
+  coverImageURL: emptyOrUrl.default(''),
+  narrator: z.string().max(120).optional(),
+  transcript: z.string().max(20000).optional(),
   category: z.enum(['SLEEP', 'ANXIETY', 'FOCUS', 'BREATHING', 'BODY_SCAN']),
   status: z.enum(['DRAFT', 'PUBLISHED', 'SCHEDULED', 'ARCHIVED']).default('DRAFT'),
 });

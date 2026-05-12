@@ -20,6 +20,8 @@ import type {
   SurveyAnswersInput,
   SendVerificationInput,
   VerifyEmailInput,
+  RequestEmailChangeInput,
+  ConfirmEmailChangeInput,
 } from '../validators/auth.validator.js';
 import type { User } from '../generated/prisma/client.js';
 
@@ -193,4 +195,95 @@ export async function resetPassword(input: ResetPasswordInput) {
   ]);
 
   return { message: 'Your password has been updated.' };
+}
+
+/**
+ * Change-email flow. We email the verification code to the user's CURRENT
+ * address (the security pattern called out in Section 11 of the brief): if
+ * an attacker has access to a new mailbox but not the current one, they
+ * can't hijack the account.
+ *
+ *   1. requestEmailChange(userId, { newEmail }) → generates a code, stores
+ *      it against the user, emails it to the CURRENT address.
+ *   2. confirmEmailChange(userId, { code }) → swaps user.email if the code
+ *      matches and is unexpired. Marks the request consumed.
+ */
+export async function requestEmailChange(userId: string, input: RequestEmailChangeInput) {
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  if (!user) throw ApiError.notFound("We couldn't find that account.");
+
+  const target = input.newEmail.toLowerCase().trim();
+  if (target === user.email.toLowerCase()) {
+    throw ApiError.badRequest('That is already your email.');
+  }
+  const taken = await prisma.user.findUnique({ where: { email: target } });
+  if (taken) throw ApiError.badRequest('That email is already in use.');
+
+  // Invalidate any older outstanding requests so the newest code is the
+  // only one that works.
+  await prisma.emailChangeRequest.updateMany({
+    where: { userId, consumed: false },
+    data: { consumed: true },
+  });
+
+  const code = sixDigitCode();
+  const expiresAt = new Date(Date.now() + env.EMAIL_VERIFICATION_CODE_TTL_MINUTES * 60 * 1000);
+  await prisma.emailChangeRequest.create({
+    data: { userId, newEmail: target, code, expiresAt },
+  });
+
+  // Reuse the password-reset template structure — same shape (code + TTL
+  // line) just with a different surrounding sentence. Falls back to the
+  // verify template if you'd rather a dedicated copy later.
+  const tpl = passwordResetTemplate({
+    fullName: user.fullName,
+    code,
+    ttlMinutes: env.EMAIL_VERIFICATION_CODE_TTL_MINUTES,
+  });
+  await sendMail({
+    to: user.email,
+    subject: 'Confirm your email change · YWBC',
+    html: tpl.html.replace(
+      'reset your password',
+      `confirm changing your email to ${target}`,
+    ),
+    text: tpl.text.replace(
+      'reset your password',
+      `confirm changing your email to ${target}`,
+    ),
+  });
+
+  return { message: `A 6-digit code is on its way to ${user.email}.` };
+}
+
+export async function confirmEmailChange(userId: string, input: ConfirmEmailChangeInput) {
+  const record = await prisma.emailChangeRequest.findFirst({
+    where: { userId, code: input.code, consumed: false },
+    orderBy: { createdAt: 'desc' },
+  });
+  if (!record) throw ApiError.badRequest("That code didn't match. Try again gently.");
+  if (record.expiresAt < new Date()) {
+    throw ApiError.badRequest('That code has expired. Request a fresh one.');
+  }
+
+  // Race check: someone else may have grabbed the target email between
+  // request and confirm.
+  const taken = await prisma.user.findUnique({ where: { email: record.newEmail } });
+  if (taken && taken.id !== userId) {
+    throw ApiError.badRequest('That email is already in use.');
+  }
+
+  const [updated] = await prisma.$transaction([
+    prisma.user.update({
+      where: { id: userId },
+      // Treat the new email as unverified until the next sign-in re-verifies.
+      data: { email: record.newEmail, emailVerified: false },
+    }),
+    prisma.emailChangeRequest.update({
+      where: { id: record.id },
+      data: { consumed: true },
+    }),
+  ]);
+
+  return { user: sanitize(updated), message: 'Your email is updated.' };
 }

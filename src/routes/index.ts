@@ -11,6 +11,7 @@ import { sessionsRoutes } from './sessions.routes.js';
 import { bookingsRoutes } from './bookings.routes.js';
 import { moodRoutes } from './mood.routes.js';
 import { uploadsRoutes } from './uploads.routes.js';
+import { chatRoutes } from './chat.routes.js';
 import { adminRoutes } from './admin/index.js';
 
 export function mountRoutes(app: Hono<AppEnv>): void {
@@ -26,5 +27,6 @@ export function mountRoutes(app: Hono<AppEnv>): void {
   app.route('/api/bookings', bookingsRoutes);
   app.route('/api/mood', moodRoutes);
   app.route('/api/uploads', uploadsRoutes);
+  app.route('/api/chat', chatRoutes);
   app.route('/api/admin', adminRoutes);
 }

@@ -37,6 +37,16 @@ export const verifyEmailSchema = z.object({
 });
 export type VerifyEmailInput = z.infer<typeof verifyEmailSchema>;
 
+export const requestEmailChangeSchema = z.object({
+  newEmail: z.string().email('Please enter a valid email'),
+});
+export type RequestEmailChangeInput = z.infer<typeof requestEmailChangeSchema>;
+
+export const confirmEmailChangeSchema = z.object({
+  code: z.string().regex(/^\d{6}$/, 'Enter the 6-digit code from your email'),
+});
+export type ConfirmEmailChangeInput = z.infer<typeof confirmEmailChangeSchema>;
+
 export const updateProfileSchema = z.object({
   fullName: z.string().min(2).optional(),
   phone: z.string().min(7).max(20).optional(),

@@ -31,6 +31,8 @@ model User {
   moodEntries               MoodEntry[]
   passwordResets            PasswordReset[]
   emailVerifications        EmailVerification[]
+  emailChangeRequests       EmailChangeRequest[]
+  chatConversations         ChatConversation[]
 }
 
 enum Role {
@@ -68,6 +70,23 @@ model EmailVerification {
   @@index([code])
 }
 
+/// One-shot record for the change-email flow. The 6-digit code is emailed to
+/// the user's CURRENT address (so a stolen new-email can't hijack the
+/// account). When consumed, the user's `email` is swapped to `newEmail`.
+model EmailChangeRequest {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  newEmail  String
+  code      String
+  expiresAt DateTime
+  consumed  Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([code])
+}
+
 // ─────────── PSYCHOLOGISTS ───────────
 model Psychologist {
   id                 String        @id @default(cuid())
@@ -78,6 +97,12 @@ model Psychologist {
   specialties        String[]
   languages          String[]
   credentials        String[]
+  /// Contact + payout details added in the revamp. Email is optional so
+  /// historical records keep loading; new profiles populate it.
+  email              String?
+  phone              String?
+  momoNumber         String?
+  momoAccountName    String?
   pricePerSession    Int
   pricingByType      Json
   sessionTypes       SessionType[]
@@ -154,7 +179,24 @@ model OnlineConversation {
   coverImageURL String
   hostName      String
   hostPhotoURL  String
+  /// Existing free-text topic line (also doubles as host title today).
   topic         String
+  /// New "topic area" classification (Trauma & Healing, Stress…). Optional
+  /// to keep older rows valid until the admin re-edits them.
+  topicArea     String?
+  /// New session "kind" — circle / workshop / support / training /
+  /// conversation. Optional until older rows are migrated.
+  gatheringType GatheringType?
+  /// Optional in-person location fields.
+  locationName  String?
+  address       String?
+  /// Optional language label for the session.
+  language      String?
+  /// Co-hosts (names) and prep items shown on the detail page.
+  coHosts       String[]           @default([])
+  prepItems     String[]           @default([])
+  /// Free-text accessibility notes for the detail page.
+  accessibilityNotes String?
   dateTime      DateTime
   duration      Int
   capacity      Int
@@ -169,6 +211,14 @@ model OnlineConversation {
 
   registrations ConversationRegistration[]
   broadcasts    SessionBroadcast[]
+}
+
+enum GatheringType {
+  CIRCLE
+  WORKSHOP
+  SUPPORT
+  TRAINING
+  CONVERSATION
 }
 
 enum ConversationStatus {
@@ -254,6 +304,10 @@ model FAQ {
   id              String      @id @default(cuid())
   question        String
   answer          String
+  /// Kinyarwanda translations — populated by the founder so Ubuzima can
+  /// answer in the language the user wrote in.
+  questionRw      String?
+  answerRw        String?
   category        FAQCategory
   followUpActions Json?
   relatedFaqIds   String[]
@@ -277,9 +331,15 @@ model Meditation {
   id            String             @id @default(cuid())
   title         String
   description   String
-  audioURL      String
-  duration      Int
-  coverImageURL String
+  // Audio + cover are required to PUBLISH but allowed empty on draft so the
+  // admin can save partial work as they upload. The publish path checks both.
+  audioURL      String             @default("")
+  duration      Int                @default(0)
+  coverImageURL String             @default("")
+  /// Narrator name shown to listeners (e.g. "Dr. Brave Olivier"). Optional.
+  narrator      String?
+  /// Full transcript (markdown allowed) for accessibility + search. Optional.
+  transcript    String?
   category      MeditationCategory
   status        ContentStatus      @default(DRAFT)
   publishedAt   DateTime?
@@ -337,4 +397,61 @@ model MoodEntry {
   createdAt DateTime @default(now())
 
   @@index([userId, createdAt])
+}
+
+// ─────────── CHATBOT (Ubuzima) ───────────
+model ChatConversation {
+  id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// Auto-derived from the first user message — keeps the list scannable.
+  title         String?
+  language      Language @default(EN)
+  /// Flipped to true the moment any message triggers the crisis protocol.
+  /// Admin reviews these proactively.
+  hasCrisisFlag Boolean  @default(false)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  messages      ChatMessage[]
+
+  @@index([userId, updatedAt])
+}
+
+model ChatMessage {
+  id             String           @id @default(cuid())
+  conversationId String
+  conversation   ChatConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  role           MessageRole
+  content        String
+  /// What Ubuzima attached alongside the text — quote, meditation, therapist,
+  /// session, faq ids. Mobile renders inline cards from these.
+  enrichments    Json?
+  /// Tappable buttons under the message (book_therapist / view_meditation / etc).
+  quickActions   Json?
+  language       Language
+  /// Token cost of this turn (used for daily-quota guarding).
+  tokensUsed     Int?
+  isCrisis       Boolean          @default(false)
+  createdAt      DateTime         @default(now())
+
+  @@index([conversationId, createdAt])
+}
+
+enum MessageRole {
+  USER
+  ASSISTANT
+  SYSTEM
+}
+
+model AdminNotification {
+  id        String    @id @default(cuid())
+  type      String
+  title     String
+  body      String
+  payload   Json?
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([readAt, createdAt])
 }

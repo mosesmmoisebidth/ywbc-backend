@@ -41,6 +41,14 @@ const envSchema = z.object({
   RESEND_API_KEY: z.string().optional(),
 
   ANTHROPIC_API_KEY: z.string().optional(),
+
+  // Gemini — powers Ubuzima. Optional so missing-key dev environments still
+  // boot; the chat route returns a graceful error if absent.
+  GEMINI_API_KEY: z.string().optional(),
+  GEMINI_MODEL: z.string().default('gemini-2.5-flash'),
+  /// Soft cap on assistant messages per calendar day across all users.
+  /// When exceeded, the chat route returns a gentle "Ubuzima is resting" line.
+  CHAT_DAILY_MESSAGE_BUDGET: z.coerce.number().int().positive().default(1500),
 });
 
 const parsed = envSchema.safeParse(process.env);

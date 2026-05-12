@@ -8,6 +8,10 @@ interface MeditationInput {
   audioURL: string;
   duration: number;
   coverImageURL: string;
+  /** Narrator name shown to listeners. Optional. */
+  narrator?: string;
+  /** Full transcript for accessibility + search. Optional. */
+  transcript?: string;
   category: MeditationCategory;
   status: ContentStatus;
 }

@@ -12,6 +12,8 @@ import {
   surveyAnswersSchema,
   sendVerificationSchema,
   verifyEmailSchema,
+  requestEmailChangeSchema,
+  confirmEmailChangeSchema,
   type SignUpInput,
   type SignInInput,
   type ForgotPasswordInput,
@@ -20,6 +22,8 @@ import {
   type SurveyAnswersInput,
   type SendVerificationInput,
   type VerifyEmailInput,
+  type RequestEmailChangeInput,
+  type ConfirmEmailChangeInput,
 } from '../validators/auth.validator.js';
 import * as authService from '../services/auth.service.js';
 import { authLimiter, forgotPasswordLimiter } from '../middleware/rateLimit.middleware.js';
@@ -87,3 +91,27 @@ userRoutes.patch('/me/survey', authMiddleware, validateBody(surveyAnswersSchema)
   const data = await authService.saveSurveyAnswers(user.id, input);
   return c.json(ok(data, 'Thank you. We will hold this gently.'));
 });
+
+userRoutes.post(
+  '/me/email/request-change',
+  authMiddleware,
+  validateBody(requestEmailChangeSchema),
+  async (c) => {
+    const user = c.get('user')!;
+    const input = c.get('validated') as RequestEmailChangeInput;
+    const result = await authService.requestEmailChange(user.id, input);
+    return c.json(ok(null, result.message));
+  },
+);
+
+userRoutes.post(
+  '/me/email/confirm-change',
+  authMiddleware,
+  validateBody(confirmEmailChangeSchema),
+  async (c) => {
+    const user = c.get('user')!;
+    const input = c.get('validated') as ConfirmEmailChangeInput;
+    const result = await authService.confirmEmailChange(user.id, input);
+    return c.json(ok(result.user, result.message));
+  },
+);
