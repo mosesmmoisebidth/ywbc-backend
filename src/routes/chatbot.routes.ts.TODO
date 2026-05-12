@@ -1,0 +1,4 @@
+// Chatbot implementation deferred — see Section 16 of backend brief.
+// `ai` and `@ai-sdk/anthropic` are installed but unused in v1.
+// FAQ endpoints (in faqs.routes.ts) cover the scripted side of the chatbot.
+// Free-form Anthropic-driven side will be a follow-up.
