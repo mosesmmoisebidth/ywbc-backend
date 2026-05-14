@@ -63,6 +63,24 @@ export async function approve(id: string, note?: string) {
   if (booking.status !== 'PAYMENT_SUBMITTED') {
     throw ApiError.badRequest('Only submitted payments can be approved.');
   }
+  // Block reusing a Transaction ID that's already been approved on another
+  // booking. Not enforced at the DB level (legacy demo rows reuse ids); we
+  // check at the approve gate where it actually matters.
+  if (booking.transactionId) {
+    const reused = await prisma.booking.findFirst({
+      where: {
+        id: { not: id },
+        transactionId: booking.transactionId,
+        status: { in: ['CONFIRMED', 'COMPLETED'] },
+      },
+      select: { id: true },
+    });
+    if (reused) {
+      throw ApiError.badRequest(
+        'That Transaction ID is already linked to another approved booking.',
+      );
+    }
+  }
   return prisma.booking.update({
     where: { id },
     data: {

@@ -148,7 +148,16 @@ model Booking {
   amount             Int
   status             BookingStatus @default(PENDING_PAYMENT)
   paymentProofURL    String?
+  // We index transactionId for the admin "is this txn already used?" check
+  // but don't enforce uniqueness at the DB level (legacy seed rows reuse the
+  // demo txn). The service does the check explicitly on approve.
   transactionId      String?
+  /// Name as it appears on the MoMo receipt — collected from the user when
+  /// they submit the manual confirmation.
+  payerName          String?
+  /// MoMo number the user paid from. Stored for cross-reference during admin
+  /// approval.
+  payerPhone         String?
   adminNotes         String?
   rejectionReason    String?
   meetingLink        String?

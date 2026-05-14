@@ -5,21 +5,29 @@ import type {
   SubmitProofInput,
 } from '../validators/booking.validator.js';
 
+// Platform-level MoMo merchant — replaces the per-therapist MoMo numbers we
+// used to collect. One admin number / one merchant code for the whole app.
 const MOMO_RECEIVER = {
-  name: 'Ngabo Brave Olivier',
-  number: '+250788312209',
+  name: 'Your Wellbeing Center',
+  number: '+250 792 207 293',
+  merchantCode: '13450',
 };
 
-const buildPaymentInstructions = (amount: number) => ({
+const buildPaymentInstructions = (amount: number, bookingId: string) => ({
   amount,
-  ussdCode: `*182*1*1*0788312209*${amount}#`,
+  // Both MoMo flows: pay-by-number (USSD *182*1*1*<number>*<amount>#) or
+  // pay-by-merchant (*182*8*1*<code>*<amount>#). The mobile UI shows both.
+  ussdCode: `*182*1*1*0792207293*${amount}#`,
+  merchantCode: MOMO_RECEIVER.merchantCode,
+  merchantUssdCode: `*182*8*1*${MOMO_RECEIVER.merchantCode}*${amount}#`,
   receiverName: MOMO_RECEIVER.name,
   receiverNumber: MOMO_RECEIVER.number,
+  reference: `YWBC-${bookingId.slice(-6).toUpperCase()}`,
   instructions: [
-    'Dial the code on the device with the MoMo number.',
-    'Confirm the payment to the listed name.',
-    'Take a screenshot of the confirmation message, or note the transaction ID.',
-    'Submit it on the next screen so we can confirm your booking.',
+    `Open *182# on the MoMo number you'll pay from.`,
+    `Send ${amount.toLocaleString('en-US')} RWF to ${MOMO_RECEIVER.number} or merchant code ${MOMO_RECEIVER.merchantCode}.`,
+    'Note the Transaction ID from the confirmation SMS, or screenshot it.',
+    'Come back and tap "Confirm payment".',
   ],
 });
 
@@ -61,7 +69,7 @@ export async function create(userId: string, input: CreateBookingInput) {
 
   return {
     booking,
-    payment: buildPaymentInstructions(input.amount),
+    payment: buildPaymentInstructions(input.amount, booking.id),
   };
 }
 
@@ -86,16 +94,23 @@ export async function getOwn(userId: string, id: string) {
 
 export async function submitProof(userId: string, id: string, input: SubmitProofInput) {
   const booking = await getOwn(userId, id);
-  if (booking.status !== 'PENDING_PAYMENT') {
+  // Allow re-submitting after a REJECTION too — the admin may have asked for
+  // corrected details. PENDING_PAYMENT and REJECTED are the two states where
+  // the user can still send proof; anything else means we already have it.
+  if (booking.status !== 'PENDING_PAYMENT' && booking.status !== 'REJECTED') {
     throw ApiError.badRequest('This booking is not waiting for proof.');
   }
   return prisma.booking.update({
     where: { id },
     data: {
-      paymentProofURL: input.paymentProofURL,
-      transactionId: input.transactionId,
+      payerName: input.payerName,
+      payerPhone: input.payerPhone,
+      paymentProofURL: input.paymentProofURL ?? null,
+      transactionId: input.transactionId ?? null,
       status: 'PAYMENT_SUBMITTED',
       paymentSubmittedAt: new Date(),
+      // Wipe any prior rejection reason so the admin sees a clean retry.
+      rejectionReason: null,
     },
     include: { psychologist: true },
   });
