@@ -26,6 +26,7 @@ export async function create(input: SessionCreateInput) {
     data: {
       ...input,
       dateTime: new Date(input.dateTime),
+      ...(input.endsAt ? { endsAt: new Date(input.endsAt) } : {}),
     },
   });
 }
@@ -37,6 +38,7 @@ export async function update(id: string, input: Partial<SessionCreateInput>) {
     data: {
       ...input,
       ...(input.dateTime ? { dateTime: new Date(input.dateTime) } : {}),
+      ...(input.endsAt ? { endsAt: new Date(input.endsAt) } : {}),
     },
   });
 }

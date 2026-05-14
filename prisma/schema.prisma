@@ -181,23 +181,28 @@ model OnlineConversation {
   hostPhotoURL  String
   /// Existing free-text topic line (also doubles as host title today).
   topic         String
-  /// New "topic area" classification (Trauma & Healing, Stress…). Optional
-  /// to keep older rows valid until the admin re-edits them.
-  topicArea     String?
+  /// "Topic areas" classification (Trauma & Healing, Stress…). A session can
+  /// span multiple topics, so this is an array. Empty by default to keep
+  /// older rows valid until the admin re-edits them.
+  topicAreas    String[]      @default([])
   /// New session "kind" — circle / workshop / support / training /
   /// conversation. Optional until older rows are migrated.
   gatheringType GatheringType?
   /// Optional in-person location fields.
   locationName  String?
   address       String?
-  /// Optional language label for the session.
-  language      String?
+  /// Languages the gathering will be held in. A session can be bilingual
+  /// (e.g. Kinyarwanda + English), so this is an array. Empty by default.
+  languages     String[]      @default([])
   /// Co-hosts (names) and prep items shown on the detail page.
   coHosts       String[]           @default([])
   prepItems     String[]           @default([])
   /// Free-text accessibility notes for the detail page.
   accessibilityNotes String?
   dateTime      DateTime
+  /// Optional end date for multi-day gatherings (e.g. a 3-day workshop).
+  /// Null for single-day sessions — most sessions don't span days.
+  endsAt        DateTime?
   duration      Int
   capacity      Int
   isFree        Boolean            @default(true)

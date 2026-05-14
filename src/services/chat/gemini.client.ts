@@ -30,7 +30,12 @@ function client(): GenerativeModel {
       temperature: 0.7,
       topP: 0.95,
       topK: 40,
-      maxOutputTokens: 512,
+      // Generous ceiling — Gemini 2.5 Flash supports 8k output tokens.
+      // The client renders long messages behind a Show more / Show less
+      // pill, so we let Ubuzima answer fully rather than truncating mid
+      // thought. Kinyarwanda also tokenises denser than English so a tight
+      // cap silently cut RW replies in half.
+      maxOutputTokens: 8192,
     },
   });
   return cached;

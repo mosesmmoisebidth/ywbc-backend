@@ -66,25 +66,32 @@ export const sessionCreateSchema = z.object({
   coverImageURL: emptyOrUrl.default(''),
   hostName: z.string().min(2),
   hostPhotoURL: emptyOrUrl.default(''),
-  topic: z.string().min(2),
+  // Legacy free-text "topic" line. Kept around because seed rows depend on
+  // it, but optional now that gatheringType + topicAreas carry the real
+  // meaning. Defaults to '' so Prisma's required column stays satisfied.
+  topic: z.string().max(120).default(''),
   // New metadata fields from the revamp wizard. All optional so we don't
   // break existing seed rows and we keep "save as draft" frictionless.
-  topicArea: z.string().min(2).max(80).optional(),
+  topicAreas: z.array(z.string().min(2).max(80)).max(8).optional(),
   gatheringType: z
     .enum(['CIRCLE', 'WORKSHOP', 'SUPPORT', 'TRAINING', 'CONVERSATION'])
     .optional(),
   locationName: z.string().max(160).optional(),
   address: z.string().max(240).optional(),
-  language: z.string().max(40).optional(),
+  languages: z.array(z.string().min(2).max(40)).max(4).optional(),
   coHosts: z.array(z.string().min(1).max(120)).max(8).optional(),
   prepItems: z.array(z.string().min(1).max(120)).max(8).optional(),
   accessibilityNotes: z.string().max(500).optional(),
   dateTime: z.string().datetime(),
+  // Optional end timestamp for multi-day gatherings. Same ISO format.
+  endsAt: z.string().datetime().optional(),
   duration: z.number().int().min(15).max(240),
   capacity: z.number().int().min(1).max(500),
   isFree: z.boolean().default(true),
   price: z.number().int().nonnegative().optional(),
-  meetingLink: z.string().url().optional(),
+  // Empty string or URL — admins often save a draft before the meeting
+  // link is generated. Same shape as the cover-image helper above.
+  meetingLink: emptyOrUrl.optional(),
   status: z.enum(['DRAFT', 'UPCOMING', 'LIVE', 'PAST', 'CANCELLED']).default('DRAFT'),
   isRecurring: z.boolean().default(false),
   recurrence: z.enum(['WEEKLY', 'BIWEEKLY', 'MONTHLY']).optional(),

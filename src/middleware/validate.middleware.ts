@@ -33,6 +33,10 @@ const validate = <T>(source: Source, schema: ZodSchema<T>) =>
       for (const issue of result.error.issues) {
         errors[issue.path.join('.') || '_'] = issue.message;
       }
+      // Surface the per-field failures in the logs so we can debug 400s
+      // without having to attach a debugger. `console.warn` is picked up by
+      // pino through the request logger context.
+      console.warn(`[validate ${source}] failed:`, errors);
       throw ApiError.badRequest(friendly(source), errors);
     }
     c.set('validated', result.data);
